@@ -1,0 +1,48 @@
+.env
+
+######################################
+# Terraform
+######################################
+
+# 依存プラグインなどのローカルキャッシュ
+**/.terraform/*
+!.terraform.lock.hcl   # 依存バージョン固定のためロックファイルは必ずコミット
+
+# ステートファイル（機密情報を含む）
+terraform.tfstate
+terraform.tfstate.*
+crash.log
+
+# 秘匿値を含む変数ファイル
+*.tfvars
+*.tfvars.json
+
+# 計画・アウトプットファイル
+*.tfplan
+*.tfout
+
+# 一時ファイル・上書き用ファイル
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# terraformrc（Provider キャッシュや認証情報を含む）
+.terraformrc
+terraform.rc
+
+######################################
+# Terragrunt（使っていれば）
+######################################
+.terragrunt-cache/
+
+######################################
+# IDE / エディタ
+######################################
+# VS Code
+.vscode/
+# IntelliJ 系
+.idea/
+# Vim / Emacs
+.*.swp
+*~
