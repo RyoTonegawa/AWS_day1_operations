@@ -89,6 +89,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_log" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
+      # Cloud Trailがログ書き込み前にS3のACLを確認するため
       {
         Sid       = "AWSCloudTrailAclCheck",
         Effect    = "Allow",
@@ -96,6 +97,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_log" {
         Action    = "s3:GetBucketAcl",
         Resource  = aws_s3_bucket.cloudtrail_log.arn
       },
+      # CloudTrailがログ書き込みを可能にする
       {
         Sid       = "AWSCloudTrailWrite",
         Effect    = "Allow",
@@ -105,6 +107,23 @@ resource "aws_s3_bucket_policy" "cloudtrail_log" {
         Condition = {
           StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
         }
+      },
+      # TerraformユーザがPlan・Apply時にS3バケットの状態を確認するために必要
+      {
+        Sid       = "AllowTerraformAdminAccessForTerraformPlan",
+        Effect    = "Allow",
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/terraform-admin"
+        },
+        Action    = [
+          "s3:GetBucketOwnershipControls",
+          "s3:GetBucketVersioning",
+          "s3:GetEncryptionConfiguration",
+          "s3:GetBucketPolicy",
+          "s3:GetLifecycleConfiguration",
+          "s3:GetBucketPublicAccessBlock"
+        ],
+        Resource = aws_s3_bucket.cloudtrail_log.arn
       }
     ]
   })
@@ -119,6 +138,9 @@ resource "aws_cloudtrail" "main" {
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_logging                = true
+  # enable_log_file_validation = true
+  # ここを設定するとS3バケットポリシーが適用された後に
+  # CoudTrailが作成される
   depends_on                    = [aws_s3_bucket_policy.cloudtrail_log]
   tags = {
     Name        = "${var.project}-trail"
@@ -126,6 +148,24 @@ resource "aws_cloudtrail" "main" {
   }
 
   lifecycle {
-    ignore_changes = [tags_all, enable_logging] # ← 追加
+    # 以下の変更は無視する
+    # AWSによる自動変更や、手動オペレーションによってTerraformと
+    # 状態がずれてもTerraform Apply時に無視できる
+    ignore_changes = [
+      tags_all, 
+      enable_logging
+      ]
+  }
+  event_selector {
+    # 読み取りあきとりどちらも記録する
+    read_write_type = "WriteOnly"
+    # 管理イベント(＝リソースの作成)を記録
+    # データの更新などは追わない。
+    include_management_events = true
+    # CloudTrail自体がログを保存する操作のログは取得しない
+    # →無限ループに陥るため。
+    # exclude_management_event_sources = [
+    #   "cloudtrail.amazonaws.com"
+    # ]
   }
 }
